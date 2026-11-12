@@ -7,6 +7,17 @@
 
 This tool is forked from the original icloud_photos_downloader developed and maintained by volunteers. They are always looking for [help](CONTRIBUTING.md)...). I am happy to entertain feature requests on this fork. I aim to release new versions if there is something worth delivering. I almost completely re-wrote the code as I have a large photo library and the single-threaded original approach was too slow. This version uses threadpools to work in parallel. Albums are worked on with a max of 8 work threads, each of which can download up to whatever the default max is on your machine as implemented by the ThreadPoolExecutor.
 
+## Changes in this fork (icloudpd-fast)
+
+This repo is forked from [gordonaspin/icloudpd](https://github.com/gordonaspin/icloudpd) with tunable, bounded concurrency. The upstream fork hardcodes 8 album threads, each with its own `ThreadPoolExecutor` sized at `min(32, cpu_count + 4)` — up to ~128+ concurrent connections, with no global limit, which invites iCloud throttling and session errors.
+
+Changes:
+
+- `--album-workers N` — how many albums are processed in parallel (default: 4, was hardcoded 8)
+- `--download-workers N` — **global** cap on concurrent downloads across all albums, enforced with a shared semaphore (default: 20; previously unbounded per album)
+
+Downloads are network-bound, not CPU-bound: ~20 concurrent transfers saturate a typical home connection while staying under Apple's rate-limiting radar. Raise `--download-workers` only if you have an exceptionally fast connection and aren't seeing retry/backoff messages in the logs.
+
 ## Build and Install
 ``` sh
 git clone https://github.com/timlaing/pyicloud

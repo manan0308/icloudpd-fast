@@ -38,3 +38,5 @@ class Context():
     notification_script: str
     logging_config: str
     unverified_https: bool
+    album_workers: int
+    download_workers: int

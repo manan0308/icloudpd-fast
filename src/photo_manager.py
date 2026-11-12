@@ -9,7 +9,7 @@ import itertools
 import hashlib
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Event, RLock
+from threading import BoundedSemaphore, Event, RLock
 
 from tzlocal import get_localzone
 import piexif
@@ -40,6 +40,8 @@ class PhotoManager():
         self.event = Event()
         self.event.set()
         self.print_lock: RLock = RLock()
+        # global cap on concurrent transfers, shared by every album's thread pool
+        self.download_semaphore = BoundedSemaphore(ctx.download_workers)
         self.api.photos.exception_handler = self.photos_exception_handler
 
     def _connect(self) -> PhotosService:
@@ -139,7 +141,7 @@ class PhotoManager():
         reached_date_since = False
 
         pending = set()
-        with ThreadPoolExecutor() as tpe:
+        with ThreadPoolExecutor(max_workers=self.ctx.download_workers) as tpe:
             for photo in iter(photos):
                 created_date = self._created_date(album, photo)
                 if self.ctx.date_since and (created_date < self.ctx.date_since):
@@ -447,15 +449,16 @@ class PhotoManager():
         for retries in range(constants.DOWNLOAD_MEDIA_MAX_RETRIES):
             try:
                 self.event.wait()
-                photo_data = photo.download(size)
-                if photo_data:
-                    temp_download_path = download_path + ".part"
-                    with open(temp_download_path, "wb") as file_obj:
-                        file_obj.write(photo_data)
+                with self.download_semaphore:
+                    photo_data = photo.download(size)
+                    if photo_data:
+                        temp_download_path = download_path + ".part"
+                        with open(temp_download_path, "wb") as file_obj:
+                            file_obj.write(photo_data)
 
-                    os.rename(temp_download_path, download_path)
-                    self._update_mtime(photo, download_path)
-                    return True
+                        os.rename(temp_download_path, download_path)
+                        self._update_mtime(photo, download_path)
+                        return True
 
                 logger.error("Could not find URL to download %s for size %s!",
                     photo.filename, size)

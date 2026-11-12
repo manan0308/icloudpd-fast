@@ -180,6 +180,16 @@ def print_duplicates(duplicates):
 @click.option("--unverified-https",
               help="Overrides default https context with unverified https context",
               is_flag=True)
+@click.option("--album-workers",
+              help="Number of albums to process in parallel (default: 4)",
+              type=click.IntRange(1, 16),
+              default=4,
+              show_default=True)
+@click.option("--download-workers",
+              help="Maximum concurrent downloads across all albums (default: 20)",
+              type=click.IntRange(1, 64),
+              default=20,
+              show_default=True)
 
 @click.version_option()
 # pylint: disable-msg=too-many-arguments,too-many-statements
@@ -219,6 +229,8 @@ def main(
         notification_script,
         logging_config,
         unverified_https,
+        album_workers,
+        download_workers,
 ):
     """Download all iCloud photos to a local directory"""
 
@@ -243,7 +255,8 @@ def main(
                     smtp_password=smtp_password, smtp_host=smtp_host, smtp_port=smtp_port,
                     smtp_no_tls=smtp_no_tls, notification_email=notification_email,
                     notification_script=notification_script, logging_config=logging_config,
-                    unverified_https=unverified_https)
+                    unverified_https=unverified_https,
+                    album_workers=album_workers, download_workers=download_workers)
 
     logger.debug("directory: %s", ctx.directory)
     logger.debug("username: %s", ctx.username)
@@ -276,6 +289,8 @@ def main(
     logger.debug("notification_script: %s", ctx.notification_script)
     logger.debug("logging_config: %s", ctx.logging_config)
     logger.debug("unverified_https: %s", ctx.unverified_https)
+    logger.debug("album_workers: %s", ctx.album_workers)
+    logger.debug("download_workers: %s", ctx.download_workers)
 
     mdb = None
 
@@ -352,7 +367,7 @@ def main(
         logger.info(title)
 
     pending = set()
-    with ThreadPoolExecutor(max_workers=8) as tpe:
+    with ThreadPoolExecutor(max_workers=ctx.album_workers) as tpe:
         for title in album_titles:
             future = tpe.submit(pm.download_album, title)
             pending = pending | set([future])
