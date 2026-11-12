@@ -1,6 +1,6 @@
 build
 click>=8.4.1
-pyicloud[cli]>=2.6.5
+pyicloud[cli]>=2026.10.1
 python_dateutil==2.8.2
 requests>=2.20.0
 piexif==1.1.3
