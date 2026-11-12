@@ -6,7 +6,7 @@ authors = [{ name = "Gordon Aspin", email = "gordon.aspin@gmail.com" }]
 dependencies = [
     "click>=8.4.1",
     "python_dateutil==2.8.2",
-    "requests>=2.20.0",
+    "requests>=2.34.2",
     "piexif==1.1.3",
     "tzlocal",
     "pyicloud>=2.6.5",
