@@ -4,7 +4,7 @@ version = "1.2.1"
 description = "icloudpd is a command-line tool to download your iCloud Photos"
 authors = [{ name = "Gordon Aspin", email = "gordon.aspin@gmail.com" }]
 dependencies = [
-    "click>=8.4.1",
+    "click>=8.5.1",
     "python_dateutil==2.8.2",
     "requests>=2.20.0",
     "piexif==1.1.3",
