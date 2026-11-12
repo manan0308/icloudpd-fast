@@ -9,7 +9,7 @@ import itertools
 import hashlib
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import BoundedSemaphore, Event, RLock
+from threading import Event, RLock
 
 from tzlocal import get_localzone
 import piexif
@@ -21,6 +21,7 @@ from pyicloud.exceptions import (PyiCloud2SARequiredException,
                                  PyiCloudFailedLoginException)
 
 import constants
+from adaptive_gate import AdaptiveGate
 from context import Context
 from icloud.authentication import authenticate
 from database import database
@@ -40,8 +41,12 @@ class PhotoManager():
         self.event = Event()
         self.event.set()
         self.print_lock: RLock = RLock()
-        # global cap on concurrent transfers, shared by every album's thread pool
-        self.download_semaphore = BoundedSemaphore(ctx.download_workers)
+        # global gate on concurrent transfers, shared by every album's thread
+        # pool; AIMD-adaptive by default, fixed at download_workers otherwise
+        self.download_gate = AdaptiveGate(
+            initial=constants.ADAPTIVE_INITIAL_WORKERS,
+            maximum=ctx.download_workers,
+            adaptive=not ctx.no_adaptive)
         self.api.photos.exception_handler = self.photos_exception_handler
 
     def _connect(self) -> PhotosService:
@@ -449,7 +454,7 @@ class PhotoManager():
         for retries in range(constants.DOWNLOAD_MEDIA_MAX_RETRIES):
             try:
                 self.event.wait()
-                with self.download_semaphore:
+                with self.download_gate:
                     photo_data = photo.download(size)
                     if photo_data:
                         temp_download_path = download_path + ".part"
@@ -458,6 +463,7 @@ class PhotoManager():
 
                         os.rename(temp_download_path, download_path)
                         self._update_mtime(photo, download_path)
+                        self.download_gate.report_success()
                         return True
 
                 logger.error("Could not find URL to download %s for size %s!",
@@ -465,6 +471,7 @@ class PhotoManager():
                 break
 
             except (ConnectionError, socket.timeout, PyiCloudAPIResponseException) as ex:
+                self.download_gate.report_throttle()
                 if "Invalid global session" in str(ex):
                     logger.error("Session error, re-authenticating...")
                     self.event.clear()

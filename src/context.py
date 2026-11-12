@@ -40,3 +40,4 @@ class Context():
     unverified_https: bool
     album_workers: int
     download_workers: int
+    no_adaptive: bool

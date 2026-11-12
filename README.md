@@ -13,10 +13,12 @@ This repo is forked from [gordonaspin/icloudpd](https://github.com/gordonaspin/i
 
 Changes:
 
+- **Adaptive parallelism (default)** — AIMD, like TCP congestion control: starts at 8 concurrent downloads, adds +1 after every 25 clean downloads, and halves the moment Apple pushes back (throttle error, session kick, timeout). The limit hovers just under whatever iCloud tolerates right now. The end-of-run log prints the peak reached — that number *is* the ceiling Apple allowed you this run.
 - `--album-workers N` — how many albums are processed in parallel (default: 4, was hardcoded 8)
-- `--download-workers N` — **global** cap on concurrent downloads across all albums, enforced with a shared semaphore (default: 20; previously unbounded per album)
+- `--download-workers N` — **global** ceiling on concurrent downloads across all albums, enforced with one shared gate (default: 32; previously unbounded per album, ~16 threads *each*)
+- `--no-adaptive` — disable the controller and run a fixed `--download-workers` concurrent downloads
 
-Downloads are network-bound, not CPU-bound: ~20 concurrent transfers saturate a typical home connection while staying under Apple's rate-limiting radar. Raise `--download-workers` only if you have an exceptionally fast connection and aren't seeing retry/backoff messages in the logs.
+Downloads are network-bound, not CPU-bound: a couple dozen concurrent transfers saturate a typical home connection. Watch the `adaptive:` log lines to see where your account/IP plateaus — it varies by time of day and library content, which is exactly why the limit is probed instead of hardcoded.
 
 ## Build and Install
 ``` sh

@@ -186,10 +186,17 @@ def print_duplicates(duplicates):
               default=4,
               show_default=True)
 @click.option("--download-workers",
-              help="Maximum concurrent downloads across all albums (default: 20)",
+              help="Ceiling on concurrent downloads across all albums. "
+                   "By default parallelism adapts: starts at 8, grows toward "
+                   "this ceiling while downloads succeed, halves when Apple "
+                   "throttles",
               type=click.IntRange(1, 64),
-              default=20,
+              default=32,
               show_default=True)
+@click.option("--no-adaptive",
+              help="Disable adaptive parallelism and run a fixed "
+                   "download-workers concurrent downloads",
+              is_flag=True)
 
 @click.version_option()
 # pylint: disable-msg=too-many-arguments,too-many-statements
@@ -231,6 +238,7 @@ def main(
         unverified_https,
         album_workers,
         download_workers,
+        no_adaptive,
 ):
     """Download all iCloud photos to a local directory"""
 
@@ -256,7 +264,8 @@ def main(
                     smtp_no_tls=smtp_no_tls, notification_email=notification_email,
                     notification_script=notification_script, logging_config=logging_config,
                     unverified_https=unverified_https,
-                    album_workers=album_workers, download_workers=download_workers)
+                    album_workers=album_workers, download_workers=download_workers,
+                    no_adaptive=no_adaptive)
 
     logger.debug("directory: %s", ctx.directory)
     logger.debug("username: %s", ctx.username)
@@ -291,6 +300,7 @@ def main(
     logger.debug("unverified_https: %s", ctx.unverified_https)
     logger.debug("album_workers: %s", ctx.album_workers)
     logger.debug("download_workers: %s", ctx.download_workers)
+    logger.debug("no_adaptive: %s", ctx.no_adaptive)
 
     mdb = None
 
@@ -404,6 +414,10 @@ def main(
     newest_asset = mdb.newest_asset()
     logger.info("Most recent asset in library is %s dated %s",
                 newest_asset['path'], newest_asset['created'])
+    if not no_adaptive:
+        logger.info("adaptive: finished at %d parallel downloads, "
+                    "peak this run was %d (the ceiling Apple tolerated)",
+                    pm.download_gate.limit, pm.download_gate.peak)
     logger.info("completed in %s", datetime.now() - start)
 
 if __name__ == "__main__":
