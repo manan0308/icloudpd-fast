@@ -69,6 +69,21 @@ def authenticate(
 
     while True:
         try:
+            if password is None:
+                # modern pyicloud no longer prompts (it raises "No password
+                # set"), so resolve keyring/prompt ourselves before connecting
+                password = utils.get_password(
+                    username, interactive=not raise_authorization_exception)
+                if password is None:
+                    raise PyiCloudFailedLoginException(
+                        f"no stored password available for {username}"
+                        " and not a TTY")
+                if (not utils.password_exists_in_keyring(username)
+                        and not raise_authorization_exception
+                        and click.confirm("save password in keyring?",
+                                          default=True)):
+                    utils.store_password_in_keyring(username, password)
+
             api: PyiCloudService = PyiCloudService(
                 apple_id=username,
                 password=password,
@@ -96,6 +111,13 @@ def authenticate(
             logger.info(message)
             if failure_count >= constants.AUTHENTICATION_MAX_RETRIES:
                 raise PyiCloudFailedLoginException(message) from e
+            if not raise_authorization_exception:
+                # wrong password: re-prompt instead of retrying the same one,
+                # and drop a stale keyring entry so the prompt actually shows
+                print(f"login failed: {e}")
+                if utils.password_exists_in_keyring(username):
+                    utils.delete_password_in_keyring(username)
+                password = None
 
 
         except PyiCloudNoStoredPasswordAvailableException as e:
