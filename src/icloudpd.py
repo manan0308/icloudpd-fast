@@ -203,7 +203,7 @@ def print_duplicates(duplicates):
                    "disabled when output is not a terminal)",
               is_flag=True)
 
-@click.version_option()
+@click.version_option(version="2.0.0", prog_name="icloudpd-fast")
 # pylint: disable-msg=too-many-arguments,too-many-statements
 # pylint: disable-msg=too-many-branches,too-many-locals
 
@@ -397,7 +397,11 @@ def main(
         while pending:
             done, pending = as_completed(pending), set()
             for future in done:
-                amd = future.result()
+                try:
+                    amd = future.result()
+                except Exception:  # keep one bad album from killing the run
+                    logger.exception("album download failed with unhandled error")
+                    continue
                 cmd['albums'][amd.name] = amd
 
     for album_name, amd in cmd['albums'].items():
@@ -425,8 +429,9 @@ def main(
         print_duplicates(mdb.fetch_duplicates())
 
     newest_asset = mdb.newest_asset()
-    logger.info("Most recent asset in library is %s dated %s",
-                newest_asset['path'], newest_asset['created'])
+    if newest_asset is not None:
+        logger.info("Most recent asset in library is %s dated %s",
+                    newest_asset['path'], newest_asset['created'])
     progress.finish()
     summary = progress.summary(datetime.now() - start)
     if progress.enabled:

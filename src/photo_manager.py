@@ -118,7 +118,9 @@ class PhotoManager():
                 # start waiting a few seconds before retrying in case
                 # there are some issues with the Apple servers
                 sleep(constants.DOWNLOAD_RETRY_WAIT_SECONDS * retries)
-            self.api = authenticate(self.ctx.username, self.ctx.password)
+            self.api = authenticate(self.ctx.username, self.ctx.password,
+                                    self.ctx.cookie_directory,
+                                    unverified_https=self.ctx.unverified_https)
         else:
             if retries > constants.DOWNLOAD_MEDIA_MAX_RETRIES:
                 logger.error("photos_exception_handler: giving up: %s", ex)
@@ -164,10 +166,15 @@ class PhotoManager():
             while pending:
                 done, pending = as_completed(pending), set()
                 for future in done:
-                    res = future.result()
+                    try:
+                        res = future.result()
+                    except Exception:  # keep one bad asset from killing the album
+                        logger.exception("%s: asset failed with unhandled error", album)
+                        self.progress.count_fail()
+                        res = None
                     self.progress.advance()
                     if res is not None:
-                        amd.assets.extend(future.result())
+                        amd.assets.extend(res)
 
         self.progress.reduce_total(photos_count - submitted)
 
@@ -304,7 +311,7 @@ class PhotoManager():
             filename = version["filename"]
             if self.ctx.live_photo_size != "original":
                 # Add size to filename if not original
-                filename = filename.replace(".MOV", f"-{self.ctx.self.ctx.live_photo_size}.MOV")
+                filename = filename.replace(".MOV", f"-{self.ctx.live_photo_size}.MOV")
             download_path = os.path.join(download_dir, filename)
             short_path = self._short_path(download_path)
             file_exists = os.path.isfile(download_path)
@@ -344,10 +351,9 @@ class PhotoManager():
                     logger.info("downloading live %s dated %s",
                                 self._truncate_middle(short_path, 96),
                                 created_date)
-                    self._download_media(photo, download_path, size)
-                    md5 = self._calculate_md5(download_path)
-
-                    pmd = PhotoMetaData(album, short_path, md5, photo)
+                    if self._download_media(photo, download_path, size):
+                        md5 = self._calculate_md5(download_path)
+                        pmd = PhotoMetaData(album, short_path, md5, photo)
         return pmd
 
     def autodelete_photos(self):
@@ -492,7 +498,7 @@ class PhotoManager():
                         # there are some issues with the Apple servers
                         sleep(constants.DOWNLOAD_RETRY_WAIT_SECONDS)
 
-                    self._connect()
+                    self.api = self._connect()
                 else:
                     # you end up here when p.e. throttleing by Apple happens
                     wait_time = (retries + 1) * constants.DOWNLOAD_RETRY_WAIT_SECONDS
