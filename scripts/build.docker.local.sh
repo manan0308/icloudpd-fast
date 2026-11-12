@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-OWNER="gordonaspin"
+OWNER="manan0308"
 PROJECT=$(basename $(pwd))
 VERSION="$(cat pyproject.toml | grep version | cut -d'"' -f 2)"
 REMOTE_HASH=$(date +%Y%m%d%H%M%S)

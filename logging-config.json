@@ -33,7 +33,7 @@
       "class": "logging.handlers.RotatingFileHandler",
       "level": "DEBUG",
       "formatter": "thread detailed",
-      "filename": "/var/log/icloudpd.log",
+      "filename": "icloudpd.log",
       "maxBytes": 10000000,
       "backupCount": 3,
       "filters": ["KeywordFilter"]

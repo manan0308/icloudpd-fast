@@ -27,13 +27,15 @@ from icloud.authentication import authenticate
 from database import database
 from utils.email_notifications import send_2sa_notification
 from meta_data import PhotoMetaData, AlbumMetaData
+from progress import ProgressTracker
 
 logger = logging.getLogger("icloudpd")
 
 class PhotoManager():
     """Main class to manage the download"""
-    def __init__(self, ctx: Context):
+    def __init__(self, ctx: Context, progress: ProgressTracker | None = None):
         self.ctx = ctx
+        self.progress = progress or ProgressTracker(enabled=False)
         self.api: PhotosService = self._connect()
         logger.info("fetching library information from iCloudService...")
         self.albums = self.api.photos.albums
@@ -144,6 +146,8 @@ class PhotoManager():
                     album, photos_count, self.ctx.size, plural_suffix, video_suffix)
 
         reached_date_since = False
+        self.progress.add_total(photos_count)
+        submitted = 0
 
         pending = set()
         with ThreadPoolExecutor(max_workers=self.ctx.download_workers) as tpe:
@@ -156,12 +160,16 @@ class PhotoManager():
                     break
                 future = tpe.submit(self.download_photo, album, photo)
                 pending = pending | set([future])
+                submitted += 1
             while pending:
                 done, pending = as_completed(pending), set()
                 for future in done:
                     res = future.result()
+                    self.progress.advance()
                     if res is not None:
                         amd.assets.extend(future.result())
+
+        self.progress.reduce_total(photos_count - submitted)
 
         if not reached_date_since:
             logger.info("%s: processed all assets", album)
@@ -226,6 +234,7 @@ class PhotoManager():
                 logger.info("skipping (already exists) %s dated %s",
                             self._truncate_middle(short_path, 96),
                             created_date)
+                self.progress.count_skip()
                 if not pdb.asset_exists(short_path):
                     md5 = self._calculate_md5(download_path)
                     logger.info("updating %s md5 %s",
@@ -321,6 +330,7 @@ class PhotoManager():
                                     self._truncate_middle(
                                         short_path, 96),
                                     created_date)
+                        self.progress.count_skip()
                         if not pdb.asset_exists(short_path):
                             md5 = self._calculate_md5(download_path)
                             logger.info("%s: updating %s md5 %s",
@@ -464,6 +474,7 @@ class PhotoManager():
                         os.rename(temp_download_path, download_path)
                         self._update_mtime(photo, download_path)
                         self.download_gate.report_success()
+                        self.progress.count_new(len(photo_data))
                         return True
 
                 logger.error("Could not find URL to download %s for size %s!",
@@ -504,6 +515,7 @@ class PhotoManager():
         else:
             logger.warning("Could not download %s! Please try again later.", photo.filename)
 
+        self.progress.count_fail()
         return False
 
     def _update_mtime(self, photo, download_path):

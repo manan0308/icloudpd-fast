@@ -41,3 +41,4 @@ class Context():
     album_workers: int
     download_workers: int
     no_adaptive: bool
+    no_progress: bool

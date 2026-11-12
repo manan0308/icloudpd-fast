@@ -17,6 +17,7 @@ import constants
 from context import Context
 from database import database
 from photo_manager import PhotoManager
+from progress import ProgressTracker
 from logger.logger import setup_logging
 
 logger = logging.getLogger("icloudpd")
@@ -197,6 +198,10 @@ def print_duplicates(duplicates):
               help="Disable adaptive parallelism and run a fixed "
                    "download-workers concurrent downloads",
               is_flag=True)
+@click.option("--no-progress",
+              help="Disable the live progress bar (it is automatically "
+                   "disabled when output is not a terminal)",
+              is_flag=True)
 
 @click.version_option()
 # pylint: disable-msg=too-many-arguments,too-many-statements
@@ -239,6 +244,7 @@ def main(
         album_workers,
         download_workers,
         no_adaptive,
+        no_progress,
 ):
     """Download all iCloud photos to a local directory"""
 
@@ -265,7 +271,7 @@ def main(
                     notification_script=notification_script, logging_config=logging_config,
                     unverified_https=unverified_https,
                     album_workers=album_workers, download_workers=download_workers,
-                    no_adaptive=no_adaptive)
+                    no_adaptive=no_adaptive, no_progress=no_progress)
 
     logger.debug("directory: %s", ctx.directory)
     logger.debug("username: %s", ctx.username)
@@ -321,7 +327,12 @@ def main(
     if list_albums or list_duplicates or only_print_filenames:
         logger.disabled = True
 
-    pm : PhotoManager = PhotoManager(ctx=ctx)
+    progress = ProgressTracker(
+        enabled=(sys.stderr.isatty()
+                 and not no_progress
+                 and not (list_albums or list_duplicates or only_print_filenames)))
+
+    pm : PhotoManager = PhotoManager(ctx=ctx, progress=progress)
 
     logger.info("there are %d assets in %d albums in your library",
                 pm.photos_count(), pm.albums_count())
@@ -376,6 +387,8 @@ def main(
     for title in album_titles:
         logger.info(title)
 
+    progress.start(pm.download_gate)
+
     pending = set()
     with ThreadPoolExecutor(max_workers=ctx.album_workers) as tpe:
         for title in album_titles:
@@ -414,6 +427,15 @@ def main(
     newest_asset = mdb.newest_asset()
     logger.info("Most recent asset in library is %s dated %s",
                 newest_asset['path'], newest_asset['created'])
+    progress.finish()
+    summary = progress.summary(datetime.now() - start)
+    if progress.enabled:
+        print(f"done: {summary}")
+        if not no_adaptive:
+            print(f"adaptive: finished at {pm.download_gate.limit} parallel"
+                  f" downloads, peak this run was {pm.download_gate.peak}"
+                  " (the ceiling Apple tolerated)")
+    logger.info("summary: %s", summary)
     if not no_adaptive:
         logger.info("adaptive: finished at %d parallel downloads, "
                     "peak this run was %d (the ceiling Apple tolerated)",

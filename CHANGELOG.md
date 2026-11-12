@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.0 (2026-02-12) — icloudpd-fast
+
+- feat: adaptive (AIMD) download concurrency, on by default — starts at 8, +1 per 25 clean downloads, halves on throttle; `--no-adaptive` for fixed rate
+- feat: live progress bar (done/left/ETA/rate, new vs. already-present counts, bytes transferred, live worker count) and plain-English end-of-run summary; `--no-progress` to disable
+- feat: `--album-workers` and `--download-workers` flags (previously hardcoded 8 album threads with unbounded per-album download pools)
+- fix: `requirements.txt` installable again (`pyicloudcli` → `pyicloud[cli]`)
+- fix: log file written to working directory instead of `/var/log` (which required root / broke Windows)
+
 ## Unreleased
 
 ## 1.7.2 (2021-01-16)

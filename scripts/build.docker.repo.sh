@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-OWNER="gordonaspin"
+OWNER="manan0308"
 PROJECT=$(basename $(pwd))
 VERSION="$(cat pyproject.toml | grep version | cut -d'"' -f 2)"
 REMOTE_HASH=$(git ls-remote https://github.com/${OWNER}/${PROJECT}.git HEAD | awk '{ print $1 }')
