@@ -5,7 +5,7 @@ description = "Parallel iCloud Photos downloader with adaptive (AIMD) concurrenc
 authors = [{ name = "Manan Agarwal" }]
 dependencies = [
     "click>=8.4.1",
-    "python_dateutil==2.8.2",
+    "python_dateutil==4.0.0",
     "requests>=2.20.0",
     "piexif==1.1.3",
     "tzlocal",
